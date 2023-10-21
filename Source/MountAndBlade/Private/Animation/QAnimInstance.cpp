@@ -6,9 +6,11 @@
 #include "Character/CharacterEnum.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "Curves/CurveVector.h"
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
+#define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
 
 UQAnimInstance::UQAnimInstance()
 {
@@ -67,10 +69,10 @@ void UQAnimInstance::UpdateAimingValues()
 	SmoothedAimingRotation = FMath::RInterpTo(SmoothedAimingRotation, AimRotation, DeltaTimeX, SmoothedAimingRotationInterpSpeed);
 
 	FRotator CharacterRotation = Character->GetActorRotation();
-	AimingAngle = { FMath::FindDeltaAngleDegrees(AimRotation.Yaw,CharacterRotation.Yaw),
-		FMath::FindDeltaAngleDegrees(AimRotation.Pitch,CharacterRotation.Pitch) };
-	SmoothedAimingAngle = { FMath::FindDeltaAngleDegrees(SmoothedAimingRotation.Yaw,CharacterRotation.Yaw),
-		FMath::FindDeltaAngleDegrees(SmoothedAimingRotation.Pitch,CharacterRotation.Pitch) };
+	AimingAngle = { FMath::FindDeltaAngleDegrees(CharacterRotation.Yaw,AimRotation.Yaw),
+		FMath::FindDeltaAngleDegrees(CharacterRotation.Pitch,AimRotation.Pitch) };
+	SmoothedAimingAngle = { FMath::FindDeltaAngleDegrees(CharacterRotation.Yaw,SmoothedAimingRotation.Yaw),
+		FMath::FindDeltaAngleDegrees(CharacterRotation.Pitch,SmoothedAimingRotation.Pitch) };
 
 	if (RotationMode != ECharacterMovementRotationMode::VelocityDirection) {
 		AimSweepTime = FMath::GetMappedRangeValueClamped(TRange<double>(-90.0, 90.0), TRange<double>(1.0,0.0), AimingAngle.Y);
@@ -80,7 +82,7 @@ void UQAnimInstance::UpdateAimingValues()
 	else {
 		if (HasMovementInput) {
 			FRotator InputDir = MovementInput.Rotation();
-			float InputCharacterAngle = FMath::FindDeltaAngleDegrees(InputDir.Yaw, CharacterRotation.Yaw);
+			float InputCharacterAngle = FMath::FindDeltaAngleDegrees( CharacterRotation.Yaw, InputDir.Yaw);
 			InputCharacterAngle = FMath::GetMappedRangeValueClamped(TRange<double>(-180.0, 180.0), TRange<double>(0.0, 1.0), AimingAngle.Y);
 			InputYawOffsetTime = FMath::FInterpTo(InputYawOffsetTime, InputCharacterAngle, DeltaTimeX, InputYawOffsetInterpSpeed);
 		}
@@ -94,8 +96,8 @@ void UQAnimInstance::UpdateAimingValues()
 void UQAnimInstance::UpdateRotationValues()
 {
 	MovementDirection =  CalculateMovementDirection();
-	float CharacterAndVelocityAngle = (Velocity.Rotation() - Character->GetControlRotation()).Yaw;
-	
+	float CharacterAndVelocityAngle = FMath::FindDeltaAngleDegrees(Character->GetControlRotation().Yaw, Velocity.Rotation().Yaw);
+	//Message2(0,"CharacterAndVelocityAngle", CharacterAndVelocityAngle);
 	FYaw = YawOffsetFB->GetVectorValue(CharacterAndVelocityAngle).X;
 	BYaw = YawOffsetFB->GetVectorValue(CharacterAndVelocityAngle).Y;
 	LYaw = YawOffsetLR->GetVectorValue(CharacterAndVelocityAngle).X;
@@ -114,9 +116,39 @@ FVelocityBlend UQAnimInstance::InterpVelocityBlend(const FVelocityBlend& Current
 
 void UQAnimInstance::UpdateOnGround()
 {
-	ShouldMove = ShouldMoveCheck();
-	UpdateMovementValues();
-	UpdateRotationValues();
+	bool NewShouldMove = ShouldMoveCheck();
+	if (!ShouldMove && NewShouldMove) {
+		ElapsedDelayTime = 0;
+		RotateL = false;
+		RotateR = false;
+	}
+	ShouldMove = NewShouldMove;
+	//Moving
+	if (ShouldMove) {
+		UpdateMovementValues();
+		UpdateRotationValues();
+	}
+	//No Moving
+	else {
+		
+		if (CanRotateInPlace()) {
+			RotateInPlaceCheck();
+		}
+		else {
+			RotateL = false;
+			RotateR = false;
+		}
+		if (CanTurnInPlace()) {
+			
+			TurnInPlaceCheck();
+			
+		}
+		else {
+			ElapsedDelayTime = 0;
+		}
+
+	}
+
 }
 
 void UQAnimInstance::UpdateCharacterInfo()
@@ -166,21 +198,21 @@ void UQAnimInstance::UpDateFootIK()
 void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateScale, float StartTime, bool OverrideCurrent)
 {
 	FRotator CharacterRotation = Character->GetActorRotation();
-	float TurnAngle = FMath::FindDeltaAngleDegrees(TargetRotation.Yaw, CharacterRotation.Yaw);
+	float TurnAngle = FMath::FindDeltaAngleDegrees(CharacterRotation.Yaw, TargetRotation.Yaw);
 	FTurnInPlaceAsset TargetTurnAsset;
 	if (fabs(TurnAngle)< Turn180Threshold){
 		if (TurnAngle < 0) {
 			switch (MovementStance)
 			{
-			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_L90; return;
-			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_L90; return;
+			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_L90; break;
+			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_L90; break;
 			}
 		}
 		else {
 			switch (MovementStance)
 			{
-			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_R90; return;
-			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_R90; return;
+			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_R90; break;
+			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_R90; break;
 			}
 		}
 	}
@@ -188,15 +220,15 @@ void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateS
 		if (TurnAngle < 0) {
 			switch (MovementStance)
 			{
-			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_L180; return;
-			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_L180; return;
+			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_L180; break;
+			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_L180; break;
 			}
 		}
 		else {
 			switch (MovementStance)
 			{
-			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_R180; return;
-			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_R180; return;
+			case ECharacterMovementStance::Stance:TargetTurnAsset = N_TurnIP_R180; break;
+			case ECharacterMovementStance::Crouching:TargetTurnAsset = CLF_TurnIP_R180; break;
 			}
 		}
 	}
@@ -212,8 +244,6 @@ void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateS
 			//²¥·ÅËÙ¶È
 		}
 	}
-		
-
 }
 
 float UQAnimInstance::CalculateWalkRunBlend()
@@ -294,9 +324,12 @@ void UQAnimInstance::TurnInPlaceCheck()
 	}
 	float ElapsedDelayTimeLimit = FMath::GetMappedRangeValueClamped(TRange<double>(TurnCheckMinAngle, 180.0),
 		TRange<double>(MinAngleDelay, MaxAngleDelay), fabs(AimingAngle.X));
-	if (ElapsedDelayTimeLimit) {
+	
+	if (ElapsedDelayTime > ElapsedDelayTimeLimit) {
+		//Message(1, AimRotation.Yaw);
 		TurninPlace(FRotator(0.0, AimRotation.Yaw, 0.0), 1.0, 0.0, false);
 	}
+	
 }
 
 bool UQAnimInstance::AngleInRange(float Angle, float MinAngle, float MaxAngle, float Buffer, bool IncreaseBuffer)
@@ -310,6 +343,7 @@ bool UQAnimInstance::AngleInRange(float Angle, float MinAngle, float MaxAngle, f
 	}
 
 }
+
 bool UQAnimInstance::CanDynamicTransition()
 {
 	return false;
@@ -335,14 +369,13 @@ void UQAnimInstance::RotateInPlaceCheck()
 		RotateRate = FMath::GetMappedRangeValueClamped(TRange<float>(AimYawRateMinRange,AimYawRateMaxRange), 
 			TRange<float>(MinPlayRate,MaxPlayRate), AimYawRate);
 	}
-
 }
 
 EMovementDirection UQAnimInstance::CalculateMovementDirection()
 {
 	auto CalculateMovementDirectionWhenWalkOrRunning = [this]() {
 		auto LookingAiming = [this]() {
-			float Angle = FMath::FindDeltaAngleDegrees(Velocity.Rotation().Yaw, AimRotation.Yaw);
+			float Angle = FMath::FindDeltaAngleDegrees( AimRotation.Yaw, Velocity.Rotation().Yaw);
 			return CalculateQuadrant(MovementDirection, 70.f, -70.f, 110.f, -110.f, 5.f, Angle);
 			};
 		switch (RotationMode)
@@ -526,7 +559,6 @@ void UQAnimInstance::ResetIKOffsets()
 	FootOffset_L_Rotation = FMath::RInterpTo(FootOffset_L_Rotation, FRotator(0, 0, 0), DeltaTimeX, 15.0f);
 	FootOffset_R_Rotation = FMath::RInterpTo(FootOffset_R_Rotation, FRotator(0, 0, 0), DeltaTimeX, 15.0f);
 }
-
 
 void UQAnimInstance::BindDeclares()
 {

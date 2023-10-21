@@ -8,10 +8,12 @@
 #include "Curves/CurveVector.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
+#define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
 
 
 
@@ -20,7 +22,9 @@ AQCharacter::AQCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	BindDeclares();
-
+	bUseControllerRotationRoll = false;
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = false;
 	if (GetMovementComponent())
 	{
 		GetMovementComponent()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -61,11 +65,11 @@ void AQCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	SetEssentialValues();
 	CacheValues();
-	switch (MovementState){
-	case ECharacterMovementState::OnGround:
+	if (MovementState == ECharacterMovementState::OnGround) {
 		UpdateCharacterMovement();
-		break;
+		UpdateGroudedRotation();
 	}
+
 	
 }
 
@@ -90,6 +94,9 @@ void AQCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		EnhancedInputComponent->BindAction(IAZoom, ETriggerEvent::Triggered, this, &AQCharacter::OnZoom);
 		EnhancedInputComponent->BindAction(IASprint, ETriggerEvent::Started, this, &AQCharacter::OnSpring);
 		EnhancedInputComponent->BindAction(IASprint, ETriggerEvent::Completed, this, &AQCharacter::OnStopSpring);
+
+		EnhancedInputComponent->BindAction(IAAim, ETriggerEvent::Started, this, &AQCharacter::OnAim);
+		EnhancedInputComponent->BindAction(IAAim, ETriggerEvent::Completed, this, &AQCharacter::OnStopAim);
 
 		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Started, this, &AQCharacter::Jump);
 		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Completed, this, &AQCharacter::StopJumping);
@@ -199,6 +206,96 @@ void AQCharacter::UpdateCharacterMovement()
 
 void AQCharacter::UpdateGroudedRotation()
 {
+	if (MovementAction == ECharacterMovementAction::None) {
+		if (CanUpdateMovingRotation()) {
+			if (MovementRotationMode == ECharacterMovementRotationMode::VelocityDirection) {
+				FRotator Target = { 0,LastVelocityRotation.Yaw,0 };
+				SmoothCharacterRotation(Target, 800.f, CalcuateGroundRotationRate());
+			}
+			else if (MovementRotationMode == ECharacterMovementRotationMode::LookingDirection) {
+				if (MovementGait == ECharacterMovementGait::Sprint) {
+					FRotator Target = { 0,LastVelocityRotation.Yaw,0 };
+					SmoothCharacterRotation(Target, 500.f, CalcuateGroundRotationRate());
+				}
+				else {
+					FRotator Target = { 0,GetControlRotation().Yaw + GetAnimCurveValue(TEXT("YawOffset")),0 };
+					SmoothCharacterRotation(Target, 500.f, CalcuateGroundRotationRate());
+				}
+
+			}
+			else if (MovementRotationMode == ECharacterMovementRotationMode::Aiming) {
+				FRotator Target = { 0,GetControlRotation().Yaw ,0 };
+				SmoothCharacterRotation(Target, 1000.f, 20.f);
+			}
+		}
+		else {
+			//Not Moving
+			if (ViewMode == ECharacterViewMode::ThirdPerson) {
+				if (MovementRotationMode == ECharacterMovementRotationMode::Aiming) {
+					LimitRotation(-100.f, 100.f, 20.f);
+				}
+				float RotationAmount = GetAnimCurveValue(TEXT("RotationAmount"));
+				if (fabs(RotationAmount) > 0.001f) {
+					RotationAmount = RotationAmount * UGameplayStatics::GetWorldDeltaSeconds(GetWorld()) * 30.f;
+					AddActorWorldRotation(FRotator(0, RotationAmount, 0));
+					TargetRotation = GetActorRotation();
+				}
+			}
+			else {
+				LimitRotation(-100.f, 100.f, 20.f);
+			}
+		}
+	}
+	else if (MovementAction == ECharacterMovementAction::Rolling) {
+		if (HasMovementInput) {
+			FRotator Target = { 0,LastMovementInputRotation.Yaw,0 };
+			SmoothCharacterRotation(Target, 0.f, 2.f);
+		}
+	}
+
+}
+
+bool AQCharacter::CanUpdateMovingRotation()
+{
+	if ((IsMoving && HasMovementInput)||Speed>150.f) {
+		if (!HasAnyRootMotion()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void AQCharacter::SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed, float ActorInterpSpeed)
+{
+	TargetRotation =  FMath::RInterpTo(TargetRotation, Target, UGameplayStatics::GetWorldDeltaSeconds(GetWorld()), TargetInterpSpeed);
+	FRotator NowRotaion = FMath::RInterpTo(GetActorRotation(), TargetRotation, UGameplayStatics::GetWorldDeltaSeconds(GetWorld()), ActorInterpSpeed);
+	SetActorRotation(NowRotaion);
+}
+
+float AQCharacter::CalcuateGroundRotationRate()
+{
+
+	float ActorRotatorSpeed = CurrentMovementSetting.RotationRateCurve->GetFloatValue(GetMappedSpeed());
+	float AimRotatorSpeed = FMath::GetMappedRangeValueClamped(TRange<float>(0.f, 300.f), TRange<float>(1.f, 3.f), AimYawRate);
+	//Message2(2,"RotationRate", AimRotatorSpeed * ActorRotatorSpeed);
+	return AimRotatorSpeed * ActorRotatorSpeed;
+}
+
+void AQCharacter::LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed)
+{
+	//瞄准夹角到达一定程度开始旋转
+	float AngleControllAndActor = FMath::FindDeltaAngleDegrees( GetActorRotation().Yaw, GetControlRotation().Yaw);
+	if (AngleControllAndActor >= AimYawMin && AngleControllAndActor <= AimYawMax) {
+		FRotator Target;
+		if (AngleControllAndActor > 0.0f) {
+			Target = { 0,GetControlRotation().Yaw + AimYawMin,0 };
+		}
+		else {
+			Target = { 0,GetControlRotation().Yaw + AimYawMax,0 };
+		}
+		//插值速度为0表示目标角度不再插值，仅仅插值真实旋转速度
+		SmoothCharacterRotation(Target, 0.0f, InterpSpeed);
+	}
 }
 
 void AQCharacter::SetEssentialValues()
@@ -234,6 +331,14 @@ FVector AQCharacter::CalculateAcceleration()
 	FVector VelocityAmount = GetVelocity() - PreviousVelocity;
 	VelocityAmount /= UGameplayStatics::GetWorldDeltaSeconds(GetWorld());
 	return VelocityAmount;
+}
+
+float AQCharacter::GetAnimCurveValue(const FName& CurveName)
+{
+	if (MainAnimInstacne) {
+		return MainAnimInstacne->GetCurveValue(CurveName);
+	}
+	return 0.0f;
 }
 
 ECharacterMovementGait AQCharacter::GetAllowedGait()
@@ -330,7 +435,7 @@ bool AQCharacter::CanSprint()
 		UCharacterMovementComponent* MovementComponent = GetCharacterMovement();
 		FRotator CurrentAcclerationRotation = MovementComponent->GetCurrentAcceleration().Rotation();
 		FRotator ControlRoattion = GetControlRotation();
-		float Delta = FMath::FindDeltaAngleDegrees(ControlRoattion.Yaw, CurrentAcclerationRotation.Yaw);
+		float Delta = FMath::FindDeltaAngleDegrees(CurrentAcclerationRotation.Yaw, ControlRoattion.Yaw);
 		if (fabs(Delta) < 50.f && MovementInputAmount > 0.9f)return true;
 		return false;
 	};
@@ -348,8 +453,10 @@ void AQCharacter::OnMove(const FInputActionValue& Value)
 {
 
 	FVector2D  MoveMent = Value.Get<FVector2D>();
-	AddMovementInput(GetActorForwardVector(), MoveMent.X);
-	AddMovementInput(GetActorRightVector(), MoveMent.Y);
+	FRotator Dir = FRotator(0, GetControlRotation().Yaw, 0);
+	AddMovementInput(Dir.Quaternion().GetForwardVector(), MoveMent.X);
+	AddMovementInput(Dir.Quaternion().GetRightVector(), MoveMent.Y);
+
 }
 
 void AQCharacter::OnLook(const FInputActionValue& Value)
@@ -394,6 +501,21 @@ void AQCharacter::OnSpring(const FInputActionValue& Value)
 void AQCharacter::OnStopSpring(const FInputActionValue& Value)
 {
 	DesiredGit = ECharacterMovementGait::Run;
+}
+
+void AQCharacter::OnAim(const FInputActionValue& Value)
+{
+	SetRotation.Broadcast(ECharacterMovementRotationMode::Aiming);
+}
+
+void AQCharacter::OnStopAim(const FInputActionValue& Value)
+{
+	if (ViewMode == ECharacterViewMode::ThirdPerson) {
+		SetRotation.Broadcast(DesiredRotationMode);
+	}
+	else {
+		SetRotation.Broadcast(ECharacterMovementRotationMode::LookingDirection);
+	}	
 }
 
 void AQCharacter::OnMovementStateChanged(ECharacterMovementState NewState)

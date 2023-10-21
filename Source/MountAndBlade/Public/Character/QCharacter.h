@@ -91,11 +91,17 @@ private:
 	void SetEssentialValues();
 	FVector CalculateAcceleration();
 	//Some Update State (Not Tick)
+	float GetAnimCurveValue(const FName& CurveName);
 
 	void UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGait);
 	void UpdateCharacterMovement();
 	void UpdateGroudedRotation();
-	
+
+	bool CanUpdateMovingRotation();
+	void SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed,float ActorInterpSpeed);
+	float CalcuateGroundRotationRate();
+	void LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed);
+
 	//Some Temp Function
 	ECharacterMovementGait GetAllowedGait();				//获取允许的步态	
 	ECharacterMovementGait GetActualGait(ECharacterMovementGait AllowedGait);
@@ -168,17 +174,22 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input|MapContext")
 		UInputMappingContext* IMBase;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IAMove;
+		UInputAction* IAMove;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IALook;
+		UInputAction* IALook;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IAZoom;
+		UInputAction* IAZoom;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IAJump;
+		UInputAction* IAJump;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IACrouch;
+		UInputAction* IACrouch;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction*  IASprint;
+		UInputAction* IASprint;
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Action")
+		UInputAction* IAAim;
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Action")
+		UInputAction* IARoll;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Inventory")
 		UInputAction*  IAOpenInventoryPanel;
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Inventory")
@@ -195,6 +206,8 @@ private:
 	void OnCrouch(const FInputActionValue& Value);
 	void OnSpring(const FInputActionValue& Value);
 	void OnStopSpring(const FInputActionValue& Value);
+	void OnAim(const FInputActionValue& Value);
+	void OnStopAim(const FInputActionValue& Value);
 
 	void OnMovementStateChanged(ECharacterMovementState NewState);
 	void OnMovementActionChanged(ECharacterMovementAction NewAction);

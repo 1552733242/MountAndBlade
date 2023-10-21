@@ -61,15 +61,15 @@ USTRUCT(BlueprintType)
 struct FTurnInPlaceAsset
 {
 	GENERATED_BODY()
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(EditAnywhere,BlueprintReadWrite)
 		UAnimSequenceBase* Animation;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float AnimatedAngle;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FName SlotName;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float PlayRate;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		bool ScaleTurnAngle;
 };
 UENUM(BlueprintType)
@@ -303,7 +303,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Config|Turn In Place")
 		float TurnCheckMinAngle = 45.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Config|Turn In Place")
-		float Turn180Threshold = 180.f;
+		float Turn180Threshold = 130.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Config|Turn In Place")
 		float AimYawRateLimit = 50.f;
 	
