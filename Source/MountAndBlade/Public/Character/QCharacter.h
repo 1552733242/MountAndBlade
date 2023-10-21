@@ -71,7 +71,6 @@ protected:
 	virtual void BeginPlay() override;
 public:
 	virtual void Tick(float DeltaTime) override;
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode = 0)override;
 	virtual void OnStartCrouch(float HeightAdjust, float ScaledHeightAdjust)override;
 	virtual void OnEndCrouch(float HeightAdjust, float ScaledHeightAdjust)override;
@@ -81,6 +80,13 @@ public:
 	virtual void GetEssentialValues(FCharacterMovementEssentialValues& Info)override;
 	virtual void Get3PPivotTarget(FTransform& Transform)override;
 	virtual void GetCameraParameters(FCameraParameters& CameraParameters)override;
+protected:
+	//Some Action BPI
+	 void Aim();
+	 void StopAim();
+	 void Sprint();
+	 void StopSprint();
+	 void ChangeMovementStance();
 
 private:
 	//Begin Play
@@ -92,16 +98,13 @@ private:
 	FVector CalculateAcceleration();
 	//Some Update State (Not Tick)
 	float GetAnimCurveValue(const FName& CurveName);
-
 	void UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGait);
 	void UpdateCharacterMovement();
 	void UpdateGroudedRotation();
-
 	bool CanUpdateMovingRotation();
 	void SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed,float ActorInterpSpeed);
 	float CalcuateGroundRotationRate();
 	void LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed);
-
 	//Some Temp Function
 	ECharacterMovementGait GetAllowedGait();				//获取允许的步态	
 	ECharacterMovementGait GetActualGait(ECharacterMovementGait AllowedGait);
@@ -141,7 +144,6 @@ private:
 	FRotator InAirRotation;
 	float YawOffset;
 	//Mantle System
-
 	//Ragdoll System
 	bool RagdollOnGround;
 	bool RagdollFaceUp;
@@ -157,7 +159,6 @@ private:
 	float LookLeftRightRate = 1.25f;
 	bool BreakFall = false;
 	bool SprintHeld = false;
-	
 	//References Event Declare
 	FSetOverlayStateRegister SetOverlayState;
 	FSetViewModeRegister SetViewMode;
@@ -165,50 +166,14 @@ private:
 	FSetRotationRegister SetRotation;
 	FSetMovementActionRegister SetMovementAction;
 	FSetMovementStateRegister SetMovementState;
-	
 	//Self Declare
 	BreakFallRegister BreakFallEvent;
-	
 private:
-	//Input System
-	UPROPERTY(EditDefaultsOnly, Category = "Input|MapContext")
-		UInputMappingContext* IMBase;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IAMove;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IALook;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IAZoom;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IAJump;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IACrouch;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|BasicLocomotion")
-		UInputAction* IASprint;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|Action")
-		UInputAction* IAAim;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|Action")
-		UInputAction* IARoll;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Input|Inventory")
-		UInputAction*  IAOpenInventoryPanel;
-	UPROPERTY(EditDefaultsOnly, Category = "Input|Inventory")
-		UInputAction*  IAPickUp;
-	
 	UPROPERTY(EditAnywhere, Category = "Movement")
 		FCharacterMovementSettingState MovementConfigData;
 	UPROPERTY(EditAnywhere, Category = "Movement")
 		FDataTableRowHandle MovementDataHandle;
 private:
-	void OnLook(const FInputActionValue& Value);
-	void OnMove(const FInputActionValue& Value);
-	void OnZoom(const FInputActionValue& Value);
-	void OnCrouch(const FInputActionValue& Value);
-	void OnSpring(const FInputActionValue& Value);
-	void OnStopSpring(const FInputActionValue& Value);
-	void OnAim(const FInputActionValue& Value);
-	void OnStopAim(const FInputActionValue& Value);
-
 	void OnMovementStateChanged(ECharacterMovementState NewState);
 	void OnMovementActionChanged(ECharacterMovementAction NewAction);
 	void OnRotationModeChanged(ECharacterMovementRotationMode NewRotationMode);
@@ -216,7 +181,6 @@ private:
 	void OnViewModeChanged(ECharacterViewMode NewViewMode);
 	void OnOverlayStateChanged(ECharacterOverlayState NewOverlayState);
 	void OnStanceChanged(ECharacterMovementStance NewStance);
-
 	void OnBreakFall();
 };
 

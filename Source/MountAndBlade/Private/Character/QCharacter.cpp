@@ -9,8 +9,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "EnhancedInputSubsystems.h"
-#include "EnhancedInputComponent.h"
 
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
 #define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
@@ -73,36 +71,12 @@ void AQCharacter::Tick(float DeltaTime)
 	
 }
 
-void AQCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void AQCharacter::SetMovementModel()
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-	
-	if (APlayerController* PlayerController = CastChecked<APlayerController>(GetController()))
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* EnhancedInputLocalPlayerSubsystem =
-			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
-		{
-			EnhancedInputLocalPlayerSubsystem->AddMappingContext(IMBase, 0);
-		}
+	if (MovementDataHandle.IsNull())return;
+	if (FCharacterMovementSettingState* Data = MovementDataHandle.GetRow<FCharacterMovementSettingState>(nullptr)) {
+		MovementConfigData = *Data;
 	}
-	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
-	{
-		//Locomotion Bind
-		EnhancedInputComponent->BindAction(IAMove, ETriggerEvent::Triggered, this, &AQCharacter::OnMove);
-		EnhancedInputComponent->BindAction(IALook, ETriggerEvent::Triggered, this, &AQCharacter::OnLook);
-		EnhancedInputComponent->BindAction(IAZoom, ETriggerEvent::Triggered, this, &AQCharacter::OnZoom);
-		EnhancedInputComponent->BindAction(IASprint, ETriggerEvent::Started, this, &AQCharacter::OnSpring);
-		EnhancedInputComponent->BindAction(IASprint, ETriggerEvent::Completed, this, &AQCharacter::OnStopSpring);
-
-		EnhancedInputComponent->BindAction(IAAim, ETriggerEvent::Started, this, &AQCharacter::OnAim);
-		EnhancedInputComponent->BindAction(IAAim, ETriggerEvent::Completed, this, &AQCharacter::OnStopAim);
-
-		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Started, this, &AQCharacter::Jump);
-		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Completed, this, &AQCharacter::StopJumping);
-		EnhancedInputComponent->BindAction(IACrouch, ETriggerEvent::Started, this, &AQCharacter::OnCrouch);
-	}
-
 }
 
 void AQCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
@@ -449,75 +423,6 @@ bool AQCharacter::CanSprint()
 	return false;
 }
 
-void AQCharacter::OnMove(const FInputActionValue& Value)
-{
-
-	FVector2D  MoveMent = Value.Get<FVector2D>();
-	FRotator Dir = FRotator(0, GetControlRotation().Yaw, 0);
-	AddMovementInput(Dir.Quaternion().GetForwardVector(), MoveMent.X);
-	AddMovementInput(Dir.Quaternion().GetRightVector(), MoveMent.Y);
-
-}
-
-void AQCharacter::OnLook(const FInputActionValue& Value)
-{
-	FVector2D  LookMent = Value.Get<FVector2D>();
-	AddControllerYawInput(LookMent.X);
-	AddControllerPitchInput(LookMent.Y);
-}
-
-void AQCharacter::SetMovementModel()
-{
-	if (MovementDataHandle.IsNull())return;
-	if (FCharacterMovementSettingState* Data = MovementDataHandle.GetRow<FCharacterMovementSettingState>(nullptr)) {
-		MovementConfigData = *Data;
-	}
-}
-
-void AQCharacter::OnZoom(const FInputActionValue& Value)
-{
-	
-}
-
-void AQCharacter::OnCrouch(const FInputActionValue& Value)
-{
-	if (MovementAction == ECharacterMovementAction::None) {
-		if (MovementState == ECharacterMovementState::OnGround) {
-			if (MovementStance == ECharacterMovementStance::Stance) {
-				Crouch();
-			}
-			if (MovementStance == ECharacterMovementStance::Crouching) {
-				UnCrouch();
-			}
-		}
-	}
-}
-
-void AQCharacter::OnSpring(const FInputActionValue& Value)
-{
-	DesiredGit = ECharacterMovementGait::Sprint;
-}
-
-void AQCharacter::OnStopSpring(const FInputActionValue& Value)
-{
-	DesiredGit = ECharacterMovementGait::Run;
-}
-
-void AQCharacter::OnAim(const FInputActionValue& Value)
-{
-	SetRotation.Broadcast(ECharacterMovementRotationMode::Aiming);
-}
-
-void AQCharacter::OnStopAim(const FInputActionValue& Value)
-{
-	if (ViewMode == ECharacterViewMode::ThirdPerson) {
-		SetRotation.Broadcast(DesiredRotationMode);
-	}
-	else {
-		SetRotation.Broadcast(ECharacterMovementRotationMode::LookingDirection);
-	}	
-}
-
 void AQCharacter::OnMovementStateChanged(ECharacterMovementState NewState)
 {
 	ECharacterMovementState PreState = MovementState;
@@ -589,5 +494,41 @@ void AQCharacter::UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGa
 
 }
 
+void AQCharacter::Aim()
+{
+	SetRotation.Broadcast(ECharacterMovementRotationMode::Aiming);
+}
 
+void AQCharacter::StopAim()
+{
+	if (ViewMode == ECharacterViewMode::ThirdPerson) {
+		SetRotation.Broadcast(DesiredRotationMode);
+	}
+	else {
+		SetRotation.Broadcast(ECharacterMovementRotationMode::LookingDirection);
+	}
+}
 
+void AQCharacter::Sprint()
+{
+	DesiredGit = ECharacterMovementGait::Sprint;
+}
+
+void AQCharacter::StopSprint()
+{
+	DesiredGit = ECharacterMovementGait::Run;
+}
+
+void AQCharacter::ChangeMovementStance()
+{
+	if (MovementAction == ECharacterMovementAction::None) {
+		if (MovementState == ECharacterMovementState::OnGround) {
+			if (MovementStance == ECharacterMovementStance::Stance) {
+				Crouch();
+			}
+			if (MovementStance == ECharacterMovementStance::Crouching) {
+				UnCrouch();
+			}
+		}
+	}
+}
