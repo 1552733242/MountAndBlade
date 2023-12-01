@@ -9,7 +9,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/KismetMathLibrary.h"
-
+#include "Animation/QAnimInstance.h"
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
 #define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
 
@@ -34,7 +34,7 @@ void AQCharacter::BeginPlay()
 	Super::BeginPlay();
 	
 	GetMesh()->AddTickPrerequisiteActor(this);
-	MainAnimInstacne = GetMesh()->GetAnimInstance();
+	MainAnimInstacne = Cast<UQAnimInstance>(GetMesh()->GetAnimInstance());
 	SetMovementModel();
 	OnGaitChanged(DesiredGit);
 	OnRotationModeChanged(DesiredRotationMode);
@@ -56,6 +56,7 @@ void AQCharacter::BindDeclares()
 	SetMovementState.AddUObject(this, &AQCharacter::OnMovementStateChanged);
 
 	BreakFallEvent.AddUObject(this, &AQCharacter::OnBreakFall);
+	RollEvent.AddUObject(this, &AQCharacter::OnRollEvent);
 }
 
 void AQCharacter::Tick(float DeltaTime)
@@ -67,8 +68,10 @@ void AQCharacter::Tick(float DeltaTime)
 		UpdateCharacterMovement();
 		UpdateGroudedRotation();
 	}
+	else if (MovementState == ECharacterMovementState::InAir) {
+		UpdateInAirRotation();
+	}
 
-	
 }
 
 void AQCharacter::SetMovementModel()
@@ -121,7 +124,6 @@ void AQCharacter::Landed(const FHitResult& Hit)
 		}
 	}
 	UKismetSystemLibrary::RetriggerableDelay(GetWorld(), 0.5f, FLatentActionInfo());
-
 }
 
 void AQCharacter::OnJumped_Implementation()
@@ -134,7 +136,7 @@ void AQCharacter::OnJumped_Implementation()
 		InAirRotation = GetActorRotation();
 	}
 	if (MainAnimInstacne) {
-
+		MainAnimInstacne->JumpEvent.Broadcast();
 	}
 }
 
@@ -142,9 +144,12 @@ void AQCharacter::GetCurrentStates(FCharacterMovementCurrentStates& Info)
 {
 	Info.MovementState = MovementState;
 	Info.PrevMovementState = PreviousMovementState;
+	Info.MovementAction = MovementAction;
 	Info.RotationMode = MovementRotationMode;
 	Info.ActualGait = MovementGait;
 	Info.ActualStance = MovementStance;
+	Info.ViewMode = ViewMode;
+	Info.OverlayState = OverlayState;
 }
 
 void AQCharacter::GetEssentialValues(FCharacterMovementEssentialValues& Info)
@@ -229,6 +234,19 @@ void AQCharacter::UpdateGroudedRotation()
 
 }
 
+void AQCharacter::UpdateInAirRotation()
+{
+	if (MovementRotationMode == ECharacterMovementRotationMode::Aiming) {
+		FRotator Target = FRotator(0, GetControlRotation().Yaw, 0);
+		SmoothCharacterRotation(Target, 0.0f, 15.0f);
+		InAirRotation = GetActorRotation();
+	}
+	else {
+		FRotator Target = FRotator(0, InAirRotation.Yaw, 0);
+		SmoothCharacterRotation(Target, 0.0f, 5.0f);
+	}
+}
+
 bool AQCharacter::CanUpdateMovingRotation()
 {
 	if ((IsMoving && HasMovementInput)||Speed>150.f) {
@@ -237,6 +255,27 @@ bool AQCharacter::CanUpdateMovingRotation()
 		}
 	}
 	return false;
+}
+
+void AQCharacter::RagdollStart()
+{
+	GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_None);
+}
+
+void AQCharacter::RagdollEnd()
+{
+}
+
+void AQCharacter::RagdollUpdate()
+{
+}
+
+void AQCharacter::SetActorLocationDuringRagdoll()
+{
+}
+
+void AQCharacter::GetGetUpAnimation()
+{
 }
 
 void AQCharacter::SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed, float ActorInterpSpeed)
@@ -248,18 +287,18 @@ void AQCharacter::SmoothCharacterRotation(const FRotator& Target, float TargetIn
 
 float AQCharacter::CalcuateGroundRotationRate()
 {
-
 	float ActorRotatorSpeed = CurrentMovementSetting.RotationRateCurve->GetFloatValue(GetMappedSpeed());
 	float AimRotatorSpeed = FMath::GetMappedRangeValueClamped(TRange<float>(0.f, 300.f), TRange<float>(1.f, 3.f), AimYawRate);
-	//Message2(2,"RotationRate", AimRotatorSpeed * ActorRotatorSpeed);
 	return AimRotatorSpeed * ActorRotatorSpeed;
 }
 
 void AQCharacter::LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed)
 {
+	
+
 	//瞄准夹角到达一定程度开始旋转
-	float AngleControllAndActor = FMath::FindDeltaAngleDegrees( GetActorRotation().Yaw, GetControlRotation().Yaw);
-	if (AngleControllAndActor >= AimYawMin && AngleControllAndActor <= AimYawMax) {
+	float AngleControllAndActor = FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw, GetControlRotation().Yaw);
+	if (AngleControllAndActor < AimYawMin || AngleControllAndActor > AimYawMax) {
 		FRotator Target;
 		if (AngleControllAndActor > 0.0f) {
 			Target = { 0,GetControlRotation().Yaw + AimYawMin,0 };
@@ -270,6 +309,13 @@ void AQCharacter::LimitRotation(float AimYawMin, float AimYawMax, float InterpSp
 		//插值速度为0表示目标角度不再插值，仅仅插值真实旋转速度
 		SmoothCharacterRotation(Target, 0.0f, InterpSpeed);
 	}
+}
+
+bool AQCharacter::SetActorLocationAndRotationAndUpdateTargetRotation(const FVector& NewLocation, const FRotator& NewRotation, 
+	bool Sweep, FHitResult& SweepHitResult, bool Teleport)
+{
+	TargetRotation = NewRotation;
+	return SetActorLocationAndRotation(NewLocation, NewRotation, Sweep, (Sweep ? &SweepHitResult : nullptr), TeleportFlagToEnum(Teleport));
 }
 
 void AQCharacter::SetEssentialValues()
@@ -446,6 +492,7 @@ void AQCharacter::OnMovementActionChanged(ECharacterMovementAction NewAction)
 
 void AQCharacter::OnRotationModeChanged(ECharacterMovementRotationMode NewRotationMode)
 {
+	MovementRotationMode = NewRotationMode;
 }
 
 void AQCharacter::OnGaitChanged(ECharacterMovementGait NewGait)
@@ -459,6 +506,7 @@ void AQCharacter::OnViewModeChanged(ECharacterViewMode NewViewMode)
 
 void AQCharacter::OnOverlayStateChanged(ECharacterOverlayState NewOverlayState)
 {
+	OverlayState = NewOverlayState;
 }
 
 void AQCharacter::OnStanceChanged(ECharacterMovementStance NewStance)
@@ -468,6 +516,16 @@ void AQCharacter::OnStanceChanged(ECharacterMovementStance NewStance)
 
 void AQCharacter::OnBreakFall()
 {
+	if (MainAnimInstacne && RollAnimMontage) {
+		MainAnimInstacne->Montage_Play(RollAnimMontage, 1.35, EMontagePlayReturnType::MontageLength);
+	}
+}
+
+void AQCharacter::OnRollEvent()
+{
+	if (MainAnimInstacne && RollAnimMontage) {
+		MainAnimInstacne->Montage_Play(RollAnimMontage, 1.15, EMontagePlayReturnType::MontageLength);
+	}
 }
 
 void AQCharacter::UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGait)
@@ -494,6 +552,46 @@ void AQCharacter::UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGa
 
 }
 
+void AQCharacter::Jump()
+{
+	if (MovementAction == ECharacterMovementAction::None) {
+		if (MovementState == ECharacterMovementState::Ragdoll) {
+
+		}
+		else if (MovementState == ECharacterMovementState::Mantling) {
+			//No Action
+		}
+		else {
+			if (MovementState == ECharacterMovementState::OnGround) {
+				if (HasMovementInput) {
+					if (MovementStance == ECharacterMovementStance::Stance) {
+						Super::Jump();
+					}
+					else {
+						Super::UnCrouch();
+					}
+				}
+				else {
+					if (MovementStance == ECharacterMovementStance::Stance) {
+						Super::Jump();
+					}
+					else {
+						Super::UnCrouch();
+					}
+				}
+			}
+			else if (MovementState == ECharacterMovementState::InAir) {
+
+			}
+		}
+	}
+}
+
+void AQCharacter::StopJumping()
+{
+	Super::StopJumping();
+}
+
 void AQCharacter::Aim()
 {
 	SetRotation.Broadcast(ECharacterMovementRotationMode::Aiming);
@@ -517,6 +615,17 @@ void AQCharacter::Sprint()
 void AQCharacter::StopSprint()
 {
 	DesiredGit = ECharacterMovementGait::Run;
+}
+
+void AQCharacter::Roll()
+{
+	
+	RollEvent.Broadcast();
+}
+
+void AQCharacter::Ragdoll()
+{
+
 }
 
 void AQCharacter::ChangeMovementStance()

@@ -12,7 +12,10 @@ class UCurveVector;
 class UCurveFloat;
 class UAnimSequenceBase;
 
-USTRUCT(BlueprintType)
+DECLARE_EVENT(UQAnimInstance, FAnimJumpRegister)
+
+
+USTRUCT(BlueprintType)	
 struct FVelocityBlend
 {
 	GENERATED_BODY()
@@ -110,6 +113,9 @@ public:
 	UQAnimInstance();
 	virtual void NativeUpdateAnimation(float DeltaSeconds)override;
 	virtual void NativeInitializeAnimation()override;
+
+public:
+	FAnimJumpRegister JumpEvent;
 protected:
 	
 	/// Character Values;    (Character Information)
@@ -194,40 +200,108 @@ protected:
 		float LYaw;
 	UPROPERTY(BlueprintReadWrite)
 		float RYaw;
+	//Anim Graph - In Air
+	UPROPERTY(BlueprintReadWrite)
+		bool Jumped;
+	UPROPERTY(BlueprintReadWrite)
+		float JumpPlayRate;
+	UPROPERTY(BlueprintReadWrite)
+		float FallSpeed;
+	UPROPERTY(BlueprintReadWrite)
+		float LandPrediction;
 	//Aim Graph - Aiming Values
 		FRotator SmoothedAimingRotation;
 		FRotator SpineRotation;
 		FVector2D AimingAngle;
 		FVector2D SmoothedAimingAngle;
+	UPROPERTY(BlueprintReadWrite)
 		float AimSweepTime;
 		float InputYawOffsetTime;
 		float ForwardYawTime;
 		float LeftYawTime;
 		float RightYawTime;
 
-	//TrunInPlace
-		float ElapsedDelayTime;
+	//Anim Graph - Layer Blending
+		int OverlayOverrideState;
+		float Enable_AimOffset;
+	UPROPERTY(BlueprintReadWrite)
+		float BasePose_N = 1.f;
+	UPROPERTY(BlueprintReadWrite)
+		float BasePose_CLF;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_L;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_L_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_L_LS;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_L_MS;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_R;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_R_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_R_LS;
+	UPROPERTY(BlueprintReadWrite)
+		float Arm_R_MS;
+	UPROPERTY(BlueprintReadWrite)
+		float Hand_L;
+	UPROPERTY(BlueprintReadWrite)
+		float Hand_R;
+	UPROPERTY(BlueprintReadWrite)
+		float Legs;
+	UPROPERTY(BlueprintReadWrite)
+		float Legs_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Pelvis;
+	UPROPERTY(BlueprintReadWrite)
+		float Pelvis_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Spine;
+	UPROPERTY(BlueprintReadWrite)
+		float Spine_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Head;
+	UPROPERTY(BlueprintReadWrite)
+		float Head_Add;
+	UPROPERTY(BlueprintReadWrite)
+		float Enable_HandIK_L;
+	UPROPERTY(BlueprintReadWrite)
+		float Enable_HandIK_R;
 	//Anim Grap - Foot IK
+	UPROPERTY(BlueprintReadWrite)
 		float FootLock_L_Alplha;
+	UPROPERTY(BlueprintReadWrite)
 		float FootLock_R_Alplha;
+	UPROPERTY(BlueprintReadWrite)
 		FVector FootLock_L_Location;
+	UPROPERTY(BlueprintReadWrite)
 		FVector FootLock_R_Location;
+	UPROPERTY(BlueprintReadWrite)
 		FRotator FootLock_L_Rotation;
+	UPROPERTY(BlueprintReadWrite)
 		FRotator FootLock_R_Rotation;
+	UPROPERTY(BlueprintReadWrite)
 		FVector FootOffset_L_Location;
+	UPROPERTY(BlueprintReadWrite)
 		FVector FootOffset_R_Location;
+	UPROPERTY(BlueprintReadWrite)
 		FRotator FootOffset_L_Rotation;
+	UPROPERTY(BlueprintReadWrite)
 		FRotator FootOffset_R_Rotation;
+	UPROPERTY(BlueprintReadWrite)
 		FVector PelvisOffset;
+	UPROPERTY(BlueprintReadWrite)
 		float PelvisAlpha;
-	//Turn In Place
-	
+	//Trun In Place
+		float ElapsedDelayTime;
 private:
-	void UpdateMovementValues();
-	void UpdateAimingValues();
-	void UpdateRotationValues();
 	void UpdateCharacterInfo();
+	void UpdateAimingValues();
+	void UpdateLayerValues();
+	void UpdateRotationValues();
 	void UpDateFootIK();
+	void UpdateMovementValues();
 	void TurninPlace(const FRotator& TargetRotation, float PlayRateScale, float StartTime, bool OverrideCurrent);
 
 	void SetFootOffsets(const FName& EnableFootIKCurve,const FName& IKFootBone,
@@ -254,6 +328,7 @@ private:
 	void  RotateInPlaceCheck();
 	void  TurnInPlaceCheck();
 	bool AngleInRange(float Angle, float MinAngle, float MaxAngle,float Buffer, bool IncreaseBuffer);
+
 	float GetAnimCurveClamped(FName name, float Bias, float ClampMin, float ClampMax);
 	FLeanAmount InterpLeanAmount(const FLeanAmount& Current, FLeanAmount& Target, float InterpSpeed, float DeltaTime);
 	EMovementDirection CalculateMovementDirection();
@@ -347,15 +422,17 @@ private:
 		float IK_TraceDistanceBelowFoot = 45.0f;
 	UPROPERTY(EditDefaultsOnly, Category = "Config|FootIK")
 		float FootHeight = 13.5f;
-
 		
 private:
 	void BindDeclares();
 	void OnPlayDynamicTransition(float ReTriggerDelay, FDynamicMontageParams Parameters);
 	void OnPlayTransition(FDynamicMontageParams Parameters);
+	void OnJump();
 protected:
 	UFUNCTION(BlueprintCallable, meta = (DisplayName = "PlayTransition"))
 		void K2_PlayTransition(FDynamicMontageParams Parameters);
 	UFUNCTION(BlueprintCallable, meta = (DisplayName = "PlayDynamicTransition"))
 		void K2_PlayDynamicTransition(float ReTriggerDelay, FDynamicMontageParams Parameters);
 };
+
+

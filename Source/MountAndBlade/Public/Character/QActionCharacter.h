@@ -14,11 +14,21 @@ class MOUNTANDBLADE_API AQActionCharacter : public AQCharacter
 {
 	GENERATED_BODY()
 public:
+
+	virtual void BeginPlay()override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void OnOverlayStateChanged(ECharacterOverlayState NewOverlayState)override;
+	UFUNCTION(BlueprintImplementableEvent)
+		void UpdataHeldObject(ECharacterOverlayState NewOverlayState);
 private:
 	void OnLook(const FInputActionValue& Value);
 	void OnMove(const FInputActionValue& Value);
 	void OnZoom(const FInputActionValue& Value);
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input|MapContext")
+		ECharacterOverlayState OverlayStateState = ECharacterOverlayState::Default;
+
+	
 	//Input System
 	UPROPERTY(EditDefaultsOnly, Category = "Input|MapContext")
 		UInputMappingContext* IMBase;

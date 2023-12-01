@@ -13,9 +13,10 @@ class UCameraComponent;
 class USpringArmComponent;
 class UInputMappingContext;
 class UInputAction;
+class UQAnimInstance;
 
-DECLARE_EVENT(AQCharacter, BreakFallRegister)
-
+DECLARE_EVENT(AQCharacter, FBreakFallRegister)
+DECLARE_EVENT(AQCharacter, FRolleventRegister)
 
 USTRUCT(BlueprintType)
 struct FCharacterMovementSetting : public FTableRowBase
@@ -80,41 +81,70 @@ public:
 	virtual void GetEssentialValues(FCharacterMovementEssentialValues& Info)override;
 	virtual void Get3PPivotTarget(FTransform& Transform)override;
 	virtual void GetCameraParameters(FCameraParameters& CameraParameters)override;
+
+	virtual void OnOverlayStateChanged(ECharacterOverlayState NewOverlayState);
+
 protected:
 	//Some Action BPI
+		
+	virtual void Jump()override;
+	virtual void StopJumping()override;
+
 	 void Aim();
 	 void StopAim();
 	 void Sprint();
 	 void StopSprint();
+	 void Roll();
+	 void Ragdoll();
+		
 	 void ChangeMovementStance();
-
 private:
-	//Begin Play
-	void SetMovementModel();
-	void BindDeclares();
-	//Tick
-	void CacheValues();
-	void SetEssentialValues();
-	FVector CalculateAcceleration();
-	//Some Update State (Not Tick)
+	//Utility
 	float GetAnimCurveValue(const FName& CurveName);
-	void UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGait);
+	void BindDeclares();
+
+	//Essential Information
+	void SetEssentialValues();
+	void CacheValues();
+	FVector CalculateAcceleration();
+
+	//Movement System
+	void SetMovementModel();
 	void UpdateCharacterMovement();
-	void UpdateGroudedRotation();
-	bool CanUpdateMovingRotation();
-	void SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed,float ActorInterpSpeed);
-	float CalcuateGroundRotationRate();
-	void LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed);
-	//Some Temp Function
+	void UpdateDynamicMovementSettings(ECharacterMovementGait AllowedGait);
+	FCharacterMovementSetting GetTargetMovementSettings();
 	ECharacterMovementGait GetAllowedGait();				//获取允许的步态	
 	ECharacterMovementGait GetActualGait(ECharacterMovementGait AllowedGait);
-	FCharacterMovementSetting GetTargetMovementSettings();
-	float GetMappedSpeed();
 	bool CanSprint();
+	float GetMappedSpeed();
+	//virtual FAnimMontageInstance GetRollAnimation() = 0;
+
+	//Rotation System
+	void UpdateGroudedRotation();
+	void UpdateInAirRotation();
+	void SmoothCharacterRotation(const FRotator& Target, float TargetInterpSpeed,float ActorInterpSpeed);
+	//void AddToCharacterRotation(FRotator DeltaRotation);实际未使用
+	void LimitRotation(float AimYawMin, float AimYawMax, float InterpSpeed);
+	bool SetActorLocationAndRotationAndUpdateTargetRotation(const FVector& NewLocation,const FRotator& NewRotation,bool Sweep,
+		FHitResult& SweepHitResult,bool Teleport);
+	float CalcuateGroundRotationRate();
+	bool CanUpdateMovingRotation();
+	
+
+	//Mantle System
+	bool MantleCheck();
+
+	//Ragdoll System
+	void RagdollStart();
+	void RagdollEnd();
+	void RagdollUpdate();
+	void SetActorLocationDuringRagdoll();
+	void GetGetUpAnimation();
+	//Some Temp Function
 
 private:
 	//References
-	UAnimInstance* MainAnimInstacne;
+	UQAnimInstance* MainAnimInstacne;
 	//Essential Information
 	FVector Acceleration;
 	bool IsMoving;
@@ -137,6 +167,8 @@ private:
 	ECharacterMovementStance MovementStance = ECharacterMovementStance::Stance;
 	ECharacterViewMode ViewMode = ECharacterViewMode::ThirdPerson;
 	ECharacterOverlayState OverlayState = ECharacterOverlayState::Default;
+	//ECharacterOverlayState OverlayState = ECharacterOverlayState::Bow;
+	 
 	//Movement System
 	FCharacterMovementSetting CurrentMovementSetting;
 	//Rotation System
@@ -159,6 +191,7 @@ private:
 	float LookLeftRightRate = 1.25f;
 	bool BreakFall = false;
 	bool SprintHeld = false;
+public:
 	//References Event Declare
 	FSetOverlayStateRegister SetOverlayState;
 	FSetViewModeRegister SetViewMode;
@@ -166,22 +199,28 @@ private:
 	FSetRotationRegister SetRotation;
 	FSetMovementActionRegister SetMovementAction;
 	FSetMovementStateRegister SetMovementState;
+private:
 	//Self Declare
-	BreakFallRegister BreakFallEvent;
+	FBreakFallRegister BreakFallEvent;
+	FRolleventRegister RollEvent;
 private:
-	UPROPERTY(EditAnywhere, Category = "Movement")
+	UPROPERTY(EditAnywhere, Category = "Config|Movement")
 		FCharacterMovementSettingState MovementConfigData;
-	UPROPERTY(EditAnywhere, Category = "Movement")
+	UPROPERTY(EditAnywhere, Category = "Config|Movement")
 		FDataTableRowHandle MovementDataHandle;
+	UPROPERTY(EditAnywhere, Category = "Config|Movement")
+		UAnimMontage * RollAnimMontage;
 private:
+	//State Changes
 	void OnMovementStateChanged(ECharacterMovementState NewState);
 	void OnMovementActionChanged(ECharacterMovementAction NewAction);
+	void OnStanceChanged(ECharacterMovementStance NewStance);
 	void OnRotationModeChanged(ECharacterMovementRotationMode NewRotationMode);
 	void OnGaitChanged(ECharacterMovementGait NewGait);
 	void OnViewModeChanged(ECharacterViewMode NewViewMode);
-	void OnOverlayStateChanged(ECharacterOverlayState NewOverlayState);
-	void OnStanceChanged(ECharacterMovementStance NewStance);
+
 	void OnBreakFall();
+	void OnRollEvent();
 };
 
 

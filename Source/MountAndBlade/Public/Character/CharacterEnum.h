@@ -4,15 +4,17 @@ UENUM(BlueprintType)
 enum class ECharacterMovementGait : uint8
 {
 	Walk	UMETA(DisplayName = "Walk"),
-	Run	UMETA(DisplayName = "Run"),
-	Sprint UMETA(DisplayName = "Sprint"),
+	Run		UMETA(DisplayName = "Run"),
+	Sprint	UMETA(DisplayName = "Sprint"),
 };
 UENUM(BlueprintType)
 enum class ECharacterMovementState : uint8
 {
 	None,
 	InAir		UMETA(DisplayName = "InAir"),
-	OnGround	UMETA(DisplayName = "OnGround")
+	OnGround	UMETA(DisplayName = "OnGround"),
+	Mantling	UMETA(DisplayName = "Mantling"),
+	Ragdoll		UMETA(DisplayName = "Ragdoll")
 };
 UENUM(BlueprintType)
 enum class ECharacterMovementRotationMode : uint8
@@ -46,4 +48,6 @@ UENUM(BlueprintType)
 enum class ECharacterOverlayState : uint8
 {
 	Default		UMETA(DisplayName = "Default"),
+	Bow 		UMETA(DisplayName = "Bow"),
+	Sword		UMETA(DisplayName = "Sword"),
 };

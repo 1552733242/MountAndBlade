@@ -5,6 +5,7 @@
 #include "Animation/QCameraAnimInstance.h"
 #include "Kismet/GameplayStatics.h"
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
+#define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
 
 
 AQPlayerCameraManager::AQPlayerCameraManager()
@@ -77,12 +78,13 @@ void AQPlayerCameraManager::CustomCameraBehavior()
 	PivotLocation += SmoothedPivotTarget.GetRotation().GetRightVector()* GetCameraBehaviorParam(TEXT("PivotOffset_Y"));
 	PivotLocation += SmoothedPivotTarget.GetRotation().GetUpVector()* GetCameraBehaviorParam(TEXT("PivotOffset_Z"));
 
+	FVector NewCameramLocation;
+	NewCameramLocation = PivotLocation;
+	NewCameramLocation += TargerCameraRotation.Quaternion().GetForwardVector()* GetCameraBehaviorParam(TEXT("CameraOffset_X"));
+	NewCameramLocation += TargerCameraRotation.Quaternion().GetRightVector() * GetCameraBehaviorParam(TEXT("CameraOffset_Y"));
+	NewCameramLocation += TargerCameraRotation.Quaternion().GetUpVector() * GetCameraBehaviorParam(TEXT("CameraOffset_Z"));
 
-	TargetCameraLocation = PivotLocation;
-	TargetCameraLocation += TargerCameraRotation.Quaternion().GetForwardVector()* GetCameraBehaviorParam(TEXT("CameraOffset_X"));
-	TargetCameraLocation += TargerCameraRotation.Quaternion().GetRightVector() * GetCameraBehaviorParam(TEXT("CameraOffset_Y"));
-	TargetCameraLocation += TargerCameraRotation.Quaternion().GetUpVector() * GetCameraBehaviorParam(TEXT("CameraOffset_Z"));
-
+	TargetCameraLocation = NewCameramLocation;
 }
 
 float AQPlayerCameraManager::GetCameraBehaviorParam(FName CurveName)
@@ -97,6 +99,7 @@ float AQPlayerCameraManager::GetCameraBehaviorParam(FName CurveName)
 FVector AQPlayerCameraManager::CalculateAxisIndependentLag(const FVector& CurrentLocation, 
 	const FVector& TargetLocation, const FRotator& CameraRotation, const FVector& LagSpeed)
 {
+
 	FRotator CameraRotationYaw = FRotator(0.0, CameraRotation.Yaw, 0.0);
 	FVector CurrentLocationUnRotatorVector = CameraRotationYaw.UnrotateVector(CurrentLocation);
 	FVector TargetLocationUnRotatorVector = CameraRotationYaw.UnrotateVector(TargetLocation);

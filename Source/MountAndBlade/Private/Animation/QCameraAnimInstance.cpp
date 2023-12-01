@@ -20,7 +20,7 @@ void UQCameraAnimInstance::UpdateCharacterInfo()
 		FCharacterMovementCurrentStates Info;
 		CharacterInfo->GetCurrentStates(Info);
 		MovementState = Info.MovementState;
-		MovementAction = Info.Action;
+		MovementAction = Info.MovementAction;
 		RotationMode = Info.RotationMode;
 		Gait = Info.ActualGait;
 		MovementStance = Info.ActualStance;

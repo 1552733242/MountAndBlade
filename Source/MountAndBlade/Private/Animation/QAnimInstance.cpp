@@ -12,6 +12,8 @@
 #define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
 #define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
 
+
+
 UQAnimInstance::UQAnimInstance()
 {
 	BindDeclares();
@@ -24,8 +26,8 @@ void UQAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (DeltaTimeX != 0.0f && Character) {
 		UpdateCharacterInfo();
 		UpdateAimingValues();
+		UpdateLayerValues();
 		UpDateFootIK();
-
 		switch (MovementState)
 		{
 		case ECharacterMovementState::InAir:
@@ -93,6 +95,30 @@ void UQAnimInstance::UpdateAimingValues()
 
 }
 
+void UQAnimInstance::UpdateLayerValues()
+{
+	Enable_AimOffset = FMath::Lerp(1.0, 0.0, GetCurveValue(TEXT("Mask_AimOffset")));
+	
+	BasePose_N = GetCurveValue(TEXT("BasePose_N"));
+	BasePose_CLF = GetCurveValue(TEXT("BasePose_CLF"));
+
+	Spine_Add = GetCurveValue(TEXT("Layering_Spine_Add"));
+	Head_Add = GetCurveValue(TEXT("Layering_Head_Add"));
+	Arm_L_Add = GetCurveValue(TEXT("Layering_Arm_L_Add"));
+	Arm_R_Add = GetCurveValue(TEXT("Layering_Arm_R_Add"));
+
+	Hand_R = GetCurveValue(TEXT("Layering_Hand_R"));
+	Hand_L = GetCurveValue(TEXT("Layering_Hand_L"));
+
+	Enable_HandIK_L = FMath::Lerp(0.0, GetCurveValue(TEXT("Enable_HandIK_L")), GetCurveValue(TEXT("Layering_Arm_L")));
+	Enable_HandIK_R = FMath::Lerp(0.0, GetCurveValue(TEXT("Enable_HandIK_R")), GetCurveValue(TEXT("Layering_Arm_R")));
+
+	Arm_L_LS = GetCurveValue(TEXT("Layering_Arm_L_LS"));
+	Arm_L_MS = 1 - FMath::Floor(Arm_L_LS);
+	Arm_R_LS = GetCurveValue(TEXT("Layering_Arm_R_LS"));
+	Arm_R_MS = 1 - FMath::Floor(Arm_R_LS);
+}
+
 void UQAnimInstance::UpdateRotationValues()
 {
 	MovementDirection =  CalculateMovementDirection();
@@ -131,6 +157,7 @@ void UQAnimInstance::UpdateOnGround()
 	//No Moving
 	else {
 		
+		
 		if (CanRotateInPlace()) {
 			RotateInPlaceCheck();
 		}
@@ -139,9 +166,7 @@ void UQAnimInstance::UpdateOnGround()
 			RotateR = false;
 		}
 		if (CanTurnInPlace()) {
-			
 			TurnInPlaceCheck();
-			
 		}
 		else {
 			ElapsedDelayTime = 0;
@@ -160,6 +185,8 @@ void UQAnimInstance::UpdateCharacterInfo()
 	RotationMode = CurrentStatesInfo.RotationMode;
 	MovementGait = CurrentStatesInfo.ActualGait;
 	MovementStance = CurrentStatesInfo.ActualStance;
+	ViewMode = CurrentStatesInfo.ViewMode;
+	OverlayState = CurrentStatesInfo.OverlayState;
 	FCharacterMovementEssentialValues EssentialValuesInfo;
 	Character->GetEssentialValues(EssentialValuesInfo);
 	Velocity = EssentialValuesInfo.Velocity;
@@ -175,6 +202,7 @@ void UQAnimInstance::UpdateCharacterInfo()
 
 void UQAnimInstance::UpDateFootIK()
 {
+	
 	SetFootLocking(TEXT("Enable_FootIK_L"), TEXT("FootLock_L"), TEXT("ik_foot_l"),
 		FootLock_L_Alplha, FootLock_L_Location, FootLock_L_Rotation);//设置左脚Location Rotation
 	SetFootLocking(TEXT("Enable_FootIK_R"), TEXT("FootLock_R"), TEXT("ik_foot_r"),
@@ -194,7 +222,24 @@ void UQAnimInstance::UpDateFootIK()
 		ResetIKOffsets();
 	}
 }
+void UQAnimInstance::TurnInPlaceCheck()
+{
+	if (fabs(AimingAngle.X) > TurnCheckMinAngle && AimYawRate < AimYawRateLimit) {
+		ElapsedDelayTime += DeltaTimeX;
+	}
+	else {
+		ElapsedDelayTime = 0.0f;
+		return;
+	}
+	float ElapsedDelayTimeLimit = FMath::GetMappedRangeValueClamped(TRange<double>(TurnCheckMinAngle, 180.0),
+		TRange<double>(MinAngleDelay, MaxAngleDelay), fabs(AimingAngle.X));
 
+	if (ElapsedDelayTime > ElapsedDelayTimeLimit) {
+		//Message(1, AimRotation.Yaw);
+		TurninPlace(FRotator(0.0, AimRotation.Yaw, 0.0), 1.0, 0.0, false);
+	}
+
+}
 void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateScale, float StartTime, bool OverrideCurrent)
 {
 	FRotator CharacterRotation = Character->GetActorRotation();
@@ -233,6 +278,7 @@ void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateS
 		}
 	}
 	if (!IsPlayingSlotAnimation(TargetTurnAsset.Animation, TargetTurnAsset.SlotName) || OverrideCurrent) {
+
 		PlaySlotAnimationAsDynamicMontage(TargetTurnAsset.Animation, TargetTurnAsset.SlotName,
 			0.2, 0.2, PlayRateScale * TargetTurnAsset.PlayRate, 1, 0.0f, StartTime);
 		if (TargetTurnAsset.ScaleTurnAngle) {
@@ -240,6 +286,7 @@ void UQAnimInstance::TurninPlace(const FRotator& TargetRotation, float PlayRateS
 			//根据角度判定播放速度
 		}
 		else {
+			
 			RotationScale = TargetTurnAsset.PlayRate * PlayRateScale;
 			//播放速度
 		}
@@ -313,24 +360,7 @@ bool UQAnimInstance::CanRotateInPlace()
 	return RotationMode == ECharacterMovementRotationMode::Aiming || ViewMode == ECharacterViewMode::FirstPerson;
 }
 
-void UQAnimInstance::TurnInPlaceCheck()
-{
-	if (fabs(AimingAngle.X) > TurnCheckMinAngle && AimYawRate < AimYawRateLimit) {
-		ElapsedDelayTime += DeltaTimeX;
-	}
-	else {
-		ElapsedDelayTime = 0.0f;
-		return;
-	}
-	float ElapsedDelayTimeLimit = FMath::GetMappedRangeValueClamped(TRange<double>(TurnCheckMinAngle, 180.0),
-		TRange<double>(MinAngleDelay, MaxAngleDelay), fabs(AimingAngle.X));
-	
-	if (ElapsedDelayTime > ElapsedDelayTimeLimit) {
-		//Message(1, AimRotation.Yaw);
-		TurninPlace(FRotator(0.0, AimRotation.Yaw, 0.0), 1.0, 0.0, false);
-	}
-	
-}
+
 
 bool UQAnimInstance::AngleInRange(float Angle, float MinAngle, float MaxAngle, float Buffer, bool IncreaseBuffer)
 {
@@ -469,12 +499,19 @@ void UQAnimInstance::SetFootOffsets(const FName& EnableFootIKCurve, const FName&
 		UKismetSystemLibrary::LineTraceSingle(this, FootTracBegin,
 			FootTracEnd, UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_Visibility),
 			false, TArray<AActor*, FDefaultAllocator>(), EDrawDebugTrace::Type::None, 
-			HitResult,false);
+			HitResult,true);
 		FRotator TargetRotationOffset;
 		if (Character->GetCharacterMovement()->IsWalkable(HitResult)) {
 			FVector OldFootFloorLocoation = FootHeight * FVector(0, 0, 1) + IKFootFloorLocation;
 			FVector NewFootFloorLocoation = FootHeight * HitResult.ImpactNormal + HitResult.ImpactPoint;
+
+			//DrawDebugPoint(GetWorld(), IKFootFloorLocation + FVector(0, 0, FootHeight) , 20.f, FColor::Cyan);
+			//DrawDebugLine(GetWorld(), FootTracBegin, FootTracEnd, FColor::Blue);
+			//DrawDebugPoint(GetWorld(), HitResult.ImpactPoint, 10.f, FColor::Red);
 			CurrentLocationTarget = NewFootFloorLocoation - OldFootFloorLocoation;
+			
+			Message2(11, "CurrentLocationTarget", CurrentLocationTarget.ToString());
+			Message2(12, "IKFootFloorLocation", IKFootFloorLocation.ToString());
 			TargetRotationOffset = FRotator(FMath::RadiansToDegrees(FMath::Atan2(HitResult.ImpactNormal.X, HitResult.ImpactNormal.Z)) * -1.f,
 				0.f,FMath::RadiansToDegrees(FMath::Atan2(HitResult.ImpactNormal.Y, HitResult.ImpactNormal.Z)));
 		}
@@ -521,7 +558,7 @@ void UQAnimInstance::SetFootLocking(const FName& EnableFootIKCurve, const FName&
 {
 	if (GetCurveValue(EnableFootIKCurve) > 0.0f) {
 		float FootLockCurveValue = GetCurveValue(FootLockCurve);
-		if (FootLockCurveValue >= 0.99f && FootLockCurveValue < CurrentFootLockAlpha) {
+		if (FootLockCurveValue >= 0.99f || FootLockCurveValue < CurrentFootLockAlpha) {
 			CurrentFootLockAlpha = FootLockCurveValue;
 		}
 		if (CurrentFootLockAlpha >= 0.99f) {
@@ -537,19 +574,27 @@ void UQAnimInstance::SetFootLocking(const FName& EnableFootIKCurve, const FName&
 
 void UQAnimInstance::SetFootLockOffsets(FVector& LocalLocation,FRotator& LocalRotation)
 {
+	
 	UCharacterMovementComponent* CharacterMovement = Character->GetCharacterMovement();
 	FRotator RotationDifference;
 	if (CharacterMovement->IsMovingOnGround()) {
 		RotationDifference = Character->GetActorRotation() - CharacterMovement->GetLastUpdateRotation();
 		RotationDifference.Normalize();
 	}
+
+	
+	LocalRotation = LocalRotation - RotationDifference;
+	LocalRotation.Normalize();
+
+	
 	FVector CurrentVelocity = Velocity * UGameplayStatics::GetWorldDeltaSeconds(GetWorld());
 	FVector LocationDifference = GetOwningComponent()->GetComponentRotation().UnrotateVector(CurrentVelocity);
+
 	FVector AmountLocation = LocalLocation - LocationDifference;
 	AmountLocation.RotateAngleAxis(RotationDifference.Yaw, FVector(0.0, 0.0, -1.0));
 	LocalLocation = AmountLocation;
-	LocalRotation  = LocalRotation - RotationDifference;
-	LocalRotation.Normalize();	
+	
+	
 }
 
 void UQAnimInstance::ResetIKOffsets()
@@ -564,16 +609,21 @@ void UQAnimInstance::BindDeclares()
 {
 	PlayTransition.AddUObject(this, &UQAnimInstance::OnPlayTransition);
 	PlayDynamicTransition.AddUObject(this, &UQAnimInstance::OnPlayDynamicTransition);
+	JumpEvent.AddUObject(this, &UQAnimInstance::OnJump);
 }
 
 void UQAnimInstance::OnPlayDynamicTransition(float ReTriggerDelay, FDynamicMontageParams Parameters)
 {
-	UKismetSystemLibrary::Delay(GetWorld(), ReTriggerDelay, FLatentActionInfo());
-	PlaySlotAnimationAsDynamicMontage(Parameters.Animation, TEXT("Grounded Slot"),
+	static FTimerHandle Timer;
+	static FTimerDelegate TimerDelegate;
+	TimerDelegate.BindLambda([&]() {
+		PlaySlotAnimationAsDynamicMontage(Parameters.Animation, TEXT("Grounded Slot"),
 		Parameters.BlendInTime,
 		Parameters.BlendOutTime,
 		Parameters.PlayRate, 1, 0.0f,
 		Parameters.StartTime);
+		});
+	GetWorld()->GetTimerManager().SetTimer(Timer, TimerDelegate, ReTriggerDelay, false);
 }
 
 void UQAnimInstance::OnPlayTransition(FDynamicMontageParams Parameters)
@@ -590,8 +640,26 @@ void UQAnimInstance::K2_PlayTransition(FDynamicMontageParams Parameters)
 	PlayTransition.Broadcast(Parameters);
 }
 
+
 void UQAnimInstance::K2_PlayDynamicTransition(float ReTriggerDelay, FDynamicMontageParams Parameters)
 {
 	PlayDynamicTransition.Broadcast(ReTriggerDelay, Parameters);
 }
+
+void UQAnimInstance::OnJump()
+{
+	Jumped = true;
+	JumpPlayRate = FMath::GetMappedRangeValueClamped(TRange<float>(0.f, 600.f),
+		TRange<float>(1.2f, 1.5f), Speed);
+	/*const FLatentActionInfo LatentInfo(0, FMath::Rand(), TEXT("OnJumpFinishCallBack"), this);
+	UKismetSystemLibrary::Delay(GetWorld(), 0.1, LatentInfo);*/
+	static FTimerHandle Timer;
+	static FTimerDelegate TimerDelegate;
+	TimerDelegate.BindLambda([&]() {
+		Jumped = false;
+		});
+	GetWorld()->GetTimerManager().SetTimer(Timer, TimerDelegate, 0.1, false);
+}
+
+
 

@@ -5,6 +5,15 @@
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 
+#define Message(key,...) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}"), { FStringFormatArg(##__VA_ARGS__)}));
+#define Message2(key,Arg1,Arg2) GEngine->AddOnScreenDebugMessage(key, 1, FColor::Red,FString::Format(TEXT("{0}:{1}"), { FStringFormatArg(Arg1),FStringFormatArg(Arg2)}));
+
+
+void AQActionCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+	SetOverlayState.Broadcast(OverlayStateState);
+}
 
 void AQActionCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -32,8 +41,15 @@ void AQActionCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Started, this, &AQActionCharacter::Jump);
 		EnhancedInputComponent->BindAction(IAJump, ETriggerEvent::Completed, this, &AQActionCharacter::StopJumping);
 		EnhancedInputComponent->BindAction(IACrouch, ETriggerEvent::Started, this, &AQActionCharacter::ChangeMovementStance);
+		EnhancedInputComponent->BindAction(IARoll, ETriggerEvent::Started, this, &AQActionCharacter::Roll);
 	}
 
+}
+
+void AQActionCharacter::OnOverlayStateChanged(ECharacterOverlayState NewOverlayState)
+{
+	Super::OnOverlayStateChanged(NewOverlayState);
+	UpdataHeldObject(NewOverlayState);
 }
 
 void AQActionCharacter::OnMove(const FInputActionValue& Value)
@@ -45,15 +61,15 @@ void AQActionCharacter::OnMove(const FInputActionValue& Value)
 	AddMovementInput(Dir.Quaternion().GetRightVector(), MoveMent.Y);
 
 }
-
 void AQActionCharacter::OnLook(const FInputActionValue& Value)
 {
 	FVector2D  LookMent = Value.Get<FVector2D>();
 	AddControllerYawInput(LookMent.X);
 	AddControllerPitchInput(LookMent.Y);
 }
-
 void AQActionCharacter::OnZoom(const FInputActionValue& Value)
 {
 
 }
+
+

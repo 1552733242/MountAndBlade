@@ -25,7 +25,7 @@ struct FCharacterMovementCurrentStates
 	UPROPERTY(BlueprintReadWrite)
 		ECharacterMovementState PrevMovementState;
 	UPROPERTY(BlueprintReadWrite)
-		ECharacterMovementAction Action;
+		ECharacterMovementAction MovementAction;
 	UPROPERTY(BlueprintReadWrite)
 		ECharacterMovementRotationMode RotationMode;
 	UPROPERTY(BlueprintReadWrite)
@@ -77,4 +77,6 @@ public:
 	//Character Information
 	virtual void GetCurrentStates(FCharacterMovementCurrentStates& Info) = 0;
 	virtual void GetEssentialValues(FCharacterMovementEssentialValues& Info) = 0;
+
+
 };
